@@ -1,0 +1,149 @@
+---
+title: "My First Blockchain"
+output: html_notebook
+---
+
+# Blockchains 
+New and popular methodology for non-centralised databases / ledgers - A bit of reading: https://www.ibm.com/developerworks/cloud/library/cl-blockchain-basics-glossary-bluemix-trs/index.html
+
+
+
+```{r load_libraries}
+# library(tidyverse)
+library(digest)
+```
+
+
+
+## Blocks
+A block can be considered as an object with a few properties. We'll start with a timestamp, and index, but moving onto some more key properties like hashes.
+
+```{r blocks}
+block.example <- list(index         = 1,
+                      timestamp     = date(),
+                      data          = "Some Data",
+                      hash.previous = 0,
+                      proof         = 9,
+                      hash.new      = NULL)
+```
+
+
+
+## Hash
+Hashing is a way to solidify a block's integrity by joining it with other blocks in the chain. The basic concept of a hash is that you input a human-readable string, and the output is an encrypted string (non-human readable, or a mess of letters and numbers). Imagine you want to pass a secure piece of information to your friend, so you give them the hash (6e0d26a3a7e426d07f5eab36b494adbea5b882bfe7f0d97f9327c29ca18f3655), and the algorithm (SHA256). You then ask your friend "what's the most popular vaiable name?", so they can check if they have the correct answer that matches the hash. The digest function below takes our vector and encrypts it with sha256, however the algorithm is interchangable.
+
+Well, that's great, but how does it apply to the blockchain concept? - We can pass lots of things to the hash function (timestamp, index, information), but also the hash of the previous bock. If the penny still hasn't dropped... by including the hash of the previous block, that means that we can only produce a valid hash if we know the hash of the previous block.... clever right? With that caveat in mind, that means that a blockchain can only be added to if you have an exact, correct copy.  
+
+```{r hashed_block}
+block.hash <- function(block) {
+  block$hash.new <- digest(c(block$index,
+                             block$timestamp,
+                             block$data,
+                             block$hash.previous),
+                           "sha256")
+  return(block)
+}
+```
+
+
+
+## Simple Proof Example
+If there's a lot of information in a blockchain, then we need to create a lot of blocks, and it's sensible to control how many new blocks are made. The reasoning behind this control is in the application and natrual growth of a blockchain. A common application for blockchains is cryptocurrency (bitcoin for example) and this control mechanism means that people can't create an unlimited amount of coins in seconds, and thus saturating the currency. 
+
+This control mechanism is known as the 'proof of work' (PoW) which allows us to control the difficulty of calculating/ creating a new block. The calculation entails a measurable amount of work, and in the real world the goal is to make the object hard to create, but easy to verify. Our simple proof below is finding a number divisable by 99 and divisable by the proof of the previous block. 
+
+Blockchains in cryptocurrency add new blocks by 'miners' that solve problems sent out via the network. The miner that solves the problem first is rewarded in currency (bitcoins), and the beauty of this system is that it's decentralised. When a new block is successfully added/ mined, it is broadcast to the network so that everybody has that new block, and can verify it. The longest blockchain in the network is the valid version of the blockchain, and known as the 'decentralised consensus' - this is a key concept. 
+
+The PoW in BitCoin involves finding numbers that generate hashes with a fixed number of leading zeros. 
+(https://www.youtube.com/watch?v=HneatE69814&t=3s).
+
+```{r example}
+### Simple Proof of Work Alogrithm
+proof   <- function(proof.last) {
+  # Increment Proof
+  proof <- proof.last + 1
+  # 
+
+  # Increment the proof number until number is divisable by 
+  # 99 and by the proof of the previous block
+  while (!(proof %% 99 == 0 & proof %% proof.last == 0)) {
+    proof <- proof + 1
+  }
+  # 
+  
+  # Return proof
+  return(proof)
+}
+
+proof(10)
+```
+
+
+
+## Adding Blocks
+Below, we add all that theory into a function which chains blocks together. Before we can start though, there needs to be a genesis block which has no data and random values for proof and hashes. 
+
+```{r add_blocks}
+# A function that takes the previous block and optionally 
+# some data (in our case just a string indicating which 
+# block in the chain it is)
+block.new.gen <- function(block.previous){
+  #Proof-of-Work
+  proof.new        <- proof(block.previous$proof)
+
+  #Create new Block
+  block.new        <- list(index         = block.previous$index + 1,
+                           timestamp     = Sys.time(),
+                           data          = paste0("Block: ", block.previous$index + 1),
+                           hash.previous = block.previous$hash.new,
+                           proof         = proof.new)
+
+  #Hash the new Block
+  block.new.hashed <- block.hash(block.new)
+
+  return(block.new.hashed)
+}
+```
+
+
+
+## Genesis
+Making genesis into an R function, not too tricky!
+
+```{r genesis}
+# Define Genesis Block (index 1 and arbitrary previous hash)
+block.genesis    <-  list(index         = 1,
+                          timestamp     = Sys.time(),
+                          data          = "Genesis Block",
+                          hash.previous = "0",
+                          proof         = 1)
+```
+
+
+## Create a Blockchain
+Say 'Hello World' to our first blockchain... We create our genesis block then loop through adding new blocks. You can see as the blockchain gets longer, it's harder to get the correct solution to our simple PoW
+
+```{r create}
+# Create blockchain
+blockchain     <- list(block.genesis)
+block.previous <- blockchain[[1]]
+
+# How many blocks should we add to the 
+# chain after the genesis block
+block.toAdd    <- 20
+
+# Add blocks to the chain
+for(i in 1:block.toAdd) {
+  print(system.time(
+    block.tmp     <- block.new.gen(block.previous)
+  )) 
+  
+  blockchain[i+1] <- list(block.tmp)
+  block.previous  <- block.tmp
+  
+  print(paste0("Block ",  block.tmp$index, " has been added"))
+  print(paste0("Proof: ", block.tmp$proof))
+  print(paste0("Hash: ",  block.tmp$hash.new))
+}
+```
+
